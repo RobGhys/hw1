@@ -5,20 +5,21 @@
 #include <vector>
 #include <unordered_map>
 
-using namespace std;
 
-struct SixteenBits {
-    bitset<8> firstByte;
-    bitset<8> secondByte;
+struct TwoBytes {
+    std::bitset<8> firstByte;
+    std::bitset<8> secondByte;
 };
 
 enum OperationMod {
-    twoRegisters,
-    registerMemory
+    registerMode,
+    memoryModeNoDisplacement,
+    memoryMode8bit,
+    memoryMode16bit
 };
 
 struct X8086Instruction {
-    string operation; // mov
+    std::string operation; // mov
     /*
      * Determination bit
      * 0 -> reg register is the source
@@ -31,8 +32,8 @@ struct X8086Instruction {
      * 1 -> mov will copy 16 bits
      */
     int wBit{};
-    string sourceReg;
-    string destReg;
+    std::string sourceReg;
+    std::string destReg;
     OperationMod operationMod{};
 };
 
@@ -43,7 +44,18 @@ struct BitsetHash {
     }
 };
 
-std::unordered_map<std::bitset<3>, std::string, BitsetHash> getHashValues(int wBit) {
+std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> getMODFieldEncoding() {
+    std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> result;
+
+    result[std::bitset<2>("00")] = memoryModeNoDisplacement;
+    result[std::bitset<2>("01")] = memoryMode8bit;
+    result[std::bitset<2>("10")] = memoryMode16bit;
+    result[std::bitset<2>("11")] = registerMode;
+
+    return result;
+}
+
+std::unordered_map<std::bitset<3>, std::string, BitsetHash> getHashValuesRegisterFieldEncoding(int wBit) {
     std::unordered_map<std::bitset<3>, std::string, BitsetHash> result;
 
     if (wBit == 0) {
@@ -69,15 +81,15 @@ std::unordered_map<std::bitset<3>, std::string, BitsetHash> getHashValues(int wB
     return result;
 }
 
-X8086Instruction &getOperation(const SixteenBits &inputBits, X8086Instruction &result) {
-    bitset<6> movBits(string("100010"));
+X8086Instruction &getOperation(const TwoBytes &inputBits, X8086Instruction &result) {
+    std::bitset<6> movBits(std::string("100010"));
     size_t firstSixBitsSize = 6;
     bool sameBits = true;
     for (int i = 0; i < firstSixBitsSize; ++i)
     {
         // i+2 because movBits is bitset<6> whereas inputBits.firstByte is bitset<8>
         if (movBits[i] != inputBits.firstByte[i+2]) {
-            cout << "false! at i ==" << i << "movBits: " << movBits[i] << " | firstByte: " << inputBits.firstByte[i] << endl;
+            std::cout << "false! at i ==" << i << "movBits: " << movBits[i] << " | firstByte: " << inputBits.firstByte[i] << std::endl;
             sameBits = false;
             break;
         }
@@ -86,63 +98,74 @@ X8086Instruction &getOperation(const SixteenBits &inputBits, X8086Instruction &r
     {
         result.operation = "mov";
     }
-    return result;
 }
 
-X8086Instruction decodeInstruction(SixteenBits inputBits) {
+X8086Instruction decodeInstruction(TwoBytes inputBits) {
     X8086Instruction result;
     // note: bits are read right to left
-    result = getOperation(inputBits, result);
+    getOperation(inputBits, result);
 
-    result.dBit = inputBits.firstByte[1];
-    // right-most bit
-    result.wBit = inputBits.firstByte[0];
+    // Mov case
+    if (result.operation == "mov") {
+        result.dBit = inputBits.firstByte[1];
+        // right-most bit
+        result.wBit = inputBits.firstByte[0];
 
-    bitset<2> modField;
-    bitset<3> regField;
-    bitset<3> rmField;
+        std::bitset<2> modField;
+        std::bitset<3> regField;
+        std::bitset<3> rmField;
 
-    for (size_t i = 0; i < 2; ++i) {
-        modField[i] = inputBits.secondByte[i + 6];
-    }
+        for (size_t i = 0; i < 2; ++i) {
+            modField[i] = inputBits.secondByte[i + 6];
+        }
 
-    for (size_t j = 0; j < 3; ++j) {
-        regField[j] = inputBits.secondByte[j + 3];
-    }
+        for (size_t j = 0; j < 3; ++j) {
+            regField[j] = inputBits.secondByte[j + 3];
+        }
 
-    for (size_t k = 0; k < 3; ++k) {
-        rmField[k] = inputBits.secondByte[k];
-    }
+        for (size_t k = 0; k < 3; ++k) {
+            rmField[k] = inputBits.secondByte[k];
+        }
 
-    std::unordered_map<std::bitset<3>, std::string, BitsetHash> bitsetMap = getHashValues(result.wBit);
+        // Get MOD
+        std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> modBitsetMap = getMODFieldEncoding();
+        result.operationMod = modBitsetMap[modField];
 
-    if (result.dBit == 0) {
-        result.sourceReg = bitsetMap[regField];
-        result.destReg = bitsetMap[rmField];
-    } else {
-        result.sourceReg = bitsetMap[rmField];
-        result.destReg = bitsetMap[regField];
+        // Register to register (MOD 11)
+        if (result.operationMod == registerMode) {
+            // Get source/dest Registers
+            std::unordered_map<std::bitset<3>, std::string, BitsetHash> registerBitsetMap = getHashValuesRegisterFieldEncoding(
+                    result.wBit);
+
+            if (result.dBit == 0) {
+                result.sourceReg = registerBitsetMap[regField];
+                result.destReg = registerBitsetMap[rmField];
+            } else {
+                result.sourceReg = registerBitsetMap[rmField];
+                result.destReg = registerBitsetMap[regField];
+            }
+        }
     }
 
     return result;
 }
 
-int readBinFile(const string &listing37AssembledPath, bool littleEndian) {
-    ifstream inputFile(listing37AssembledPath, ios::binary);
+int readBinFile(const std::string &listing37AssembledPath, bool littleEndian) {
+    std::ifstream inputFile(listing37AssembledPath, std::ios::binary);
     if (!inputFile)
     {
-        cerr << "Could not open file." << endl;
+        std::cerr << "Could not open file." << std::endl;
         return 1;
     }
 
-    vector<SixteenBits> sixteenBitsVector;
+    std::vector<TwoBytes> sixteenBitsVector;
     uint16_t twoBytes;
 
     while (inputFile.read(reinterpret_cast<char*>(&twoBytes), sizeof(twoBytes)))
     {
-        auto binaryTwoBytes = bitset<16>(twoBytes);
+        auto binaryTwoBytes = std::bitset<16>(twoBytes);
 
-        SixteenBits sixteenBits;
+        TwoBytes sixteenBits;
         for (int i = 0; i < 8; ++i)
         {
             if (littleEndian)
@@ -150,7 +173,7 @@ int readBinFile(const string &listing37AssembledPath, bool littleEndian) {
                 sixteenBits.firstByte[i] = binaryTwoBytes[i];
                 sixteenBits.secondByte[i] = binaryTwoBytes[i+8];
             } else {
-                cout << "Big endian" << endl;
+                std::cout << "Big endian" << std::endl;
                 sixteenBits.firstByte[i] = binaryTwoBytes[i+8];
                 sixteenBits.secondByte[i] = binaryTwoBytes[i];
             }
@@ -161,7 +184,7 @@ int readBinFile(const string &listing37AssembledPath, bool littleEndian) {
     for (int i = 0; i < nb_elem; ++i)
     {
         X8086Instruction instruction = decodeInstruction(sixteenBitsVector[i]);
-        cout << instruction.operation << " " << instruction.destReg << ", " << instruction.sourceReg << endl;
+        std::cout << instruction.operation << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
     }
 
     inputFile.close();
@@ -172,10 +195,10 @@ int readBinFile(const string &listing37AssembledPath, bool littleEndian) {
 int main()
 {
     bool littleEndian = true;
-    string listing37AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0037_single_register_mov";
-    string listing38AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0038_many_register_mov";
+    std::string listing37AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0037_single_register_mov";
+    std::string listing38AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0038_many_register_mov";
 
     if(readBinFile(listing37AssembledPath, littleEndian) == 1) { return 1;}
-    cout << endl;
+    std::cout << std::endl;
     if(readBinFile(listing38AssembledPath, littleEndian) == 1) { return 1;}
 }
