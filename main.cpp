@@ -53,6 +53,7 @@ bool checkIfRegToRegMov(const TwoBytes &inputBits);
 bool checkIfImmediateMov(const TwoBytes &inputBits);
 std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead);
 bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction);
+std::bitset<8> readExtraByte(std::ifstream &inputFile);
 
 std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> getMODFieldEncoding() {
     std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> result;
@@ -149,7 +150,7 @@ bool checkIfImmediateMov(const TwoBytes &inputBits) {
             break;
         }
     }
-    std::cout << "This is a 1011" << std::endl;
+    //std::cout << "This is a 1011" << std::endl;
 
     return result;
 }
@@ -236,11 +237,22 @@ void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &i
     }
 }
 
-unsigned int convertBase2ToBase10(const std::bitset<8> &secondByte) {
+unsigned int convertOneByteBase2ToBase10(const std::bitset<8> &secondByte) {
     unsigned int result = 0;
-    for (size_t i = 0; i < 6; ++i) {
+    for (size_t i = 0; i < 8; ++i) {
         if (secondByte[i]) {
-            result += 1 << (5 - i);
+            result += 1 << i;
+        }
+    }
+
+    return result;
+}
+
+unsigned int convertTwoByteBases2ToBase10(const std::bitset<16> &bytes) {
+    unsigned int result = 0;
+    for (size_t i = 0; i < 16; ++i) {
+        if (bytes[i]) {
+            result += 1 << i;
         }
     }
 
@@ -285,16 +297,22 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
             std::string instrName = "mov";
             std::cout << instrName << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
         } else { // case for 'MovImmediateToRegister, 1011 w reg'
-            std::cout << "--1011--"<< std::endl;
+            //std::cout << "--1011--"<< std::endl;
             bool readAdditionalByte = decodeImmediateToRegInstruction(sixteenBits, instruction);
 
             std::cout << "additional byte? : " << readAdditionalByte << std::endl;
             if (!readAdditionalByte) {
-                instruction.sourceReg = std::to_string(convertBase2ToBase10(sixteenBits.secondByte));
+                instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
                 std::cout << "instruction.sourceReg: " << instruction.sourceReg << std::endl;
-
             } else {
-                //readExtraBytes(inputFile, nbBytesToRead);
+                std::bitset<8> highByte = readExtraByte(inputFile);
+                std::bitset<16> combinedBytes;
+                for (size_t i = 0; i < 8; ++i) {
+                    combinedBytes[i] = sixteenBits.secondByte[i]; // less significant byte
+                    combinedBytes[i + 8] = highByte[i]; // most significant byte
+                }
+
+                instruction.sourceReg = std::to_string(convertTwoByteBases2ToBase10(combinedBytes));
             }
             std::string instrName = "mov";
             std::cout << instrName << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
@@ -304,6 +322,16 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
     inputFile.close();
 
     return 0;
+}
+
+std::bitset<8> readExtraByte(std::ifstream &inputFile) {
+    unsigned char additionalBytes[1];
+    inputFile.read(reinterpret_cast<char *>(additionalBytes), 1);
+
+    std::bitset<8> byteDisplacement(additionalBytes[0]);
+    std::cout << "displacement -> " << byteDisplacement.to_ulong() << std::endl;
+
+    return byteDisplacement;
 }
 
 bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction) {
