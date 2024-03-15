@@ -52,6 +52,7 @@ struct BitsetHash {
 bool checkIfRegToRegMov(const TwoBytes &inputBits);
 bool checkIfImmediateMov(const TwoBytes &inputBits);
 std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead);
+int decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction);
 
 std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> getMODFieldEncoding() {
     std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> result;
@@ -135,18 +136,20 @@ OperationName getOperation(const TwoBytes &inputBits) {
 }
 
 bool checkIfImmediateMov(const TwoBytes &inputBits) {
-    std::cout << "input bits -> " << inputBits.firstByte << std::endl;
+    //std::cout << "input bits -> " << inputBits.firstByte << std::endl;
     bool result = true;
     std::bitset<4> bitsImmediateToReg(std::string("1011"));
     size_t lastFourBitsSize = 4; // last from right to left
     for (int i = 0; i < lastFourBitsSize; ++i) {
-        std::cout << "bit: " << inputBits.firstByte[i+4] << ", ";
+        //std::cout << "bit: " << inputBits.firstByte[i+4] << ", ";
         // i+4 because movBits is bitset<6> whereas inputBits.firstByte is bitset<8>
         if (bitsImmediateToReg[i] != inputBits.firstByte[i+4]) {
-            std::cout << "Not -- 1011 --" << std::endl;
+            //std::cout << "Not -- 1011 --" << std::endl;
             result = false;
             break;
         }
+        std::cout << "This is a 1011" << std::endl;
+
     }
     return result;
 }
@@ -163,7 +166,7 @@ bool checkIfRegToRegMov(const TwoBytes &inputBits) {
             break;
         }
     }
-    std::cout << "This is a 100010" << std::endl;
+    //std::cout << "This is a 100010" << std::endl;
     return result;
 }
 
@@ -178,7 +181,7 @@ int decodeExtraBytesFromMod(const TwoBytes &inputBits, X8086Instruction &instruc
     // Get MOD
     std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> modBitsetMap = getMODFieldEncoding();
     instruction.operationMod = modBitsetMap[modField];
-    std::cout << "Modfield -> " << modField << std::endl;
+    //std::cout << "Modfield -> " << modField << std::endl;
 
     if (instruction.operationMod == RegisterMode || instruction.operationMod == MemoryModeNoDisplacement)
         return 0;
@@ -221,7 +224,6 @@ void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &i
             instruction.destReg = registerBitsetMap[regField];
         }
     } else { // Mod is 00, 01 or 10
-        // todo get 8 or 16 bits and convert to string
         std::unordered_map<std::bitset<3>, std::string, BitsetHash>
                 effectiveAddressMap = getHashEffAddCalculationFieldEncoding(instruction.operationMod, byteDisplacement);
         if (instruction.dBit == 0) {
@@ -265,22 +267,15 @@ int readBinFile(const std::string &listing37AssembledPath, bool littleEndian) {
         if (instruction.operation == MovRegisterToRegister) { // 100010dw
             int additionalBytesNb = decodeExtraBytesFromMod(sixteenBits, instruction);
             std::string byteDisplacement;
-            if (instruction.operationMod == RegisterMode) {
-                std::cout << "Zero bytes to add, register (11)" << std::endl;
-                decodeRegToRegMovInstruction(sixteenBits, instruction, byteDisplacement);
-            } else if (instruction.operationMod == MemoryModeNoDisplacement || instruction.operationMod == MemoryMode16Bit || instruction.operationMod == MemoryMode8Bit) {
-                std::cout << "Some bytes to add (" << additionalBytesNb << ")" << std::endl;
-                //uint8_t additionalBytes[additionalBytesNb];
+            if (instruction.operationMod == MemoryModeNoDisplacement || instruction.operationMod == MemoryMode16Bit || instruction.operationMod == MemoryMode8Bit)
                 byteDisplacement = readExtraBytes(inputFile, additionalBytesNb);
-                decodeRegToRegMovInstruction(sixteenBits, instruction, byteDisplacement);
-            } else {
-                return -1;
-            }
+            decodeRegToRegMovInstruction(sixteenBits, instruction, byteDisplacement);
 
             std::string instrName = "mov";
             std::cout << instrName << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
         } else { // case for 'MovImmediateToRegister, 1011 w reg'
-            //decodeImmediateToRegInstruction(sixteenBits, instruction);
+            int nbBytesToRead = decodeImmediateToRegInstruction(sixteenBits, instruction);
+            readExtraBytes(inputFile, nbBytesToRead);
         }
     }
 
@@ -288,6 +283,23 @@ int readBinFile(const std::string &listing37AssembledPath, bool littleEndian) {
 
     return 0;
 }
+
+int decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction) {
+    int result;
+    instruction.wBit = inputBits.firstByte[3];
+
+    if (instruction.wBit == 0)
+        result = 1;
+    else
+        result = 2;
+    // fill in the bits for the 'reg' field
+    for (size_t i = 0; i < 3; ++i) {
+        instruction.destReg[i] = inputBits.firstByte[i];
+    }
+
+    return result;
+}
+
 
 std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead) {
     if (bytesToRead == 0)
@@ -313,7 +325,7 @@ int main()
     bool littleEndian = true;
     std::string listing37AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0037_single_register_mov";
     std::string listing38AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0038_many_register_mov";
-    std::string listing39AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0039_more_movs_2";
+    std::string listing39AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0039_more_movs";
 
 /*    std::cout << "--- File 37 ---" << std::endl;
     if(readBinFile(listing37AssembledPath, littleEndian) == 1) { return 1;}
