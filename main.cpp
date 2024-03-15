@@ -52,7 +52,7 @@ struct BitsetHash {
 bool checkIfRegToRegMov(const TwoBytes &inputBits);
 bool checkIfImmediateMov(const TwoBytes &inputBits);
 std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead);
-int decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction);
+bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction);
 
 std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> getMODFieldEncoding() {
     std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> result;
@@ -148,9 +148,9 @@ bool checkIfImmediateMov(const TwoBytes &inputBits) {
             result = false;
             break;
         }
-        std::cout << "This is a 1011" << std::endl;
-
     }
+    std::cout << "This is a 1011" << std::endl;
+
     return result;
 }
 
@@ -236,8 +236,19 @@ void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &i
     }
 }
 
-int readBinFile(const std::string &listing37AssembledPath, bool littleEndian) {
-    std::ifstream inputFile(listing37AssembledPath, std::ios::binary);
+unsigned int convertBase2ToBase10(const std::bitset<8> &secondByte) {
+    unsigned int result = 0;
+    for (size_t i = 0; i < 6; ++i) {
+        if (secondByte[i]) {
+            result += 1 << (5 - i);
+        }
+    }
+
+    return result;
+}
+
+int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
+    std::ifstream inputFile(listingXAssembledPath, std::ios::binary);
     if (!inputFile)
     {
         std::cerr << "Could not open file." << std::endl;
@@ -274,8 +285,19 @@ int readBinFile(const std::string &listing37AssembledPath, bool littleEndian) {
             std::string instrName = "mov";
             std::cout << instrName << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
         } else { // case for 'MovImmediateToRegister, 1011 w reg'
-            int nbBytesToRead = decodeImmediateToRegInstruction(sixteenBits, instruction);
-            readExtraBytes(inputFile, nbBytesToRead);
+            std::cout << "--1011--"<< std::endl;
+            bool readAdditionalByte = decodeImmediateToRegInstruction(sixteenBits, instruction);
+
+            std::cout << "additional byte? : " << readAdditionalByte << std::endl;
+            if (!readAdditionalByte) {
+                instruction.sourceReg = std::to_string(convertBase2ToBase10(sixteenBits.secondByte));
+                std::cout << "instruction.sourceReg: " << instruction.sourceReg << std::endl;
+
+            } else {
+                //readExtraBytes(inputFile, nbBytesToRead);
+            }
+            std::string instrName = "mov";
+            std::cout << instrName << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
         }
     }
 
@@ -284,18 +306,25 @@ int readBinFile(const std::string &listing37AssembledPath, bool littleEndian) {
     return 0;
 }
 
-int decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction) {
+bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction) {
     int result;
     instruction.wBit = inputBits.firstByte[3];
 
     if (instruction.wBit == 0)
-        result = 1;
+        result = false;
     else
-        result = 2;
-    // fill in the bits for the 'reg' field
+        result = true;
+
+    std::bitset<3> rmField;
+
     for (size_t i = 0; i < 3; ++i) {
-        instruction.destReg[i] = inputBits.firstByte[i];
+        rmField[i] = inputBits.firstByte[i];
     }
+
+    // Get value from mapping
+    std::unordered_map<std::bitset<3>, std::string, BitsetHash>
+            registerBitsetMap = getHashValuesRegisterFieldEncoding(instruction.wBit);
+    instruction.destReg = registerBitsetMap[rmField];
 
     return result;
 }
@@ -312,6 +341,7 @@ std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead) {
 
         if (bytesToRead == 1) {
             byteDisplacement = additionalBytes[0];
+            std::cout << "displacement -> " << byteDisplacement << std::endl;
         } else if (bytesToRead == 2) {
             // endian order matters. Little endian -> most significant byte is read 2nd
             byteDisplacement = additionalBytes[0] | (additionalBytes[1] << 8);
