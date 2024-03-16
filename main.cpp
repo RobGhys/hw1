@@ -20,7 +20,16 @@ enum OperationMod {
 
 enum OperationName {
     MovRegisterToRegister,
-    MovImmediateToRegister
+    MovImmediateToRegister,
+    JumpInstruction,
+    AddRegisterToRegister,
+    XImmediateToRegisterOrMemory,
+    AddImmediateToAccumulator,
+    SubRegMemoryAndRegToEither,
+    SubImmediateFromAccumulator,
+    CmpRegisterMemoryAndRegister,
+    CmpImmediateWithAccumulator,
+    NotFound
 };
 
 struct X8086Instruction {
@@ -49,11 +58,22 @@ struct BitsetHash {
     }
 };
 
-bool checkIfRegToRegMov(const TwoBytes &inputBits);
+bool checkSixBitsInRegister(const TwoBytes &inputBits, const std::bitset<6> &instructionBits);
+bool checkSevenBitsInRegister(const TwoBytes &inputBits, const std::bitset<7> &instructionBits);
 bool checkIfImmediateMov(const TwoBytes &inputBits);
 std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead);
 bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction);
 std::bitset<8> readExtraByte(std::ifstream &inputFile);
+
+bool checkIfJump(const TwoBytes &inputBits);
+
+std::vector<std::bitset<8>> getJumpInstructionBytes();
+
+bool checkAddRegToReg(const TwoBytes &bytes);
+
+void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType);
+
+void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType);
 
 std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> getMODFieldEncoding() {
     std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> result;
@@ -120,20 +140,115 @@ std::unordered_map<std::bitset<3>, std::string, BitsetHash> getHashEffAddCalcula
     return result;
 }
 
-OperationName getOperation(const TwoBytes &inputBits) {
-    OperationName result{};
+std::unordered_map<std::bitset<8>, std::string, BitsetHash> getHashJumpEncoding() {
+    std::unordered_map<std::bitset<8>, std::string, BitsetHash> result;
 
-    bool regToRegMov = checkIfRegToRegMov(inputBits);
-    if (regToRegMov) {
-        result = MovRegisterToRegister;
-    } else {
-        bool immediateToRegMov = checkIfImmediateMov(inputBits);
-        if (immediateToRegMov) {
-            result = MovImmediateToRegister;
+    result[std::bitset<8>("01110101")] = "jnz";
+    result[std::bitset<8>("01110100")] = "je";
+    result[std::bitset<8>("01111100")] = "jl";
+    result[std::bitset<8>("01111110")] = "jle";
+    result[std::bitset<8>("01110010")] = "jb";
+    result[std::bitset<8>("01110110")] = "jbe";
+    result[std::bitset<8>("01111010")] = "jp";
+    result[std::bitset<8>("01110000")] = "jo";
+    result[std::bitset<8>("01111000")] = "js";
+    result[std::bitset<8>("01111101")] = "jnl";
+    result[std::bitset<8>("01111111")] = "jg";
+    result[std::bitset<8>("01110011")] = "jnb";
+    result[std::bitset<8>("01110111")] = "ja";
+    result[std::bitset<8>("01111011")] = "jnp";
+    result[std::bitset<8>("01110001")] = "jno";
+    result[std::bitset<8>("01111001")] = "jns";
+    result[std::bitset<8>("11100001")] = "loop";
+    result[std::bitset<8>("11100001")] = "loopz";
+    result[std::bitset<8>("11100000")] = "loopnz";
+    result[std::bitset<8>("11100011")] = "jcxz";
+
+    return result;
+}
+
+OperationName getOperation(const TwoBytes &inputBits) {
+    // MOV
+    if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("100010"))))
+        return MovRegisterToRegister;
+    if (checkIfImmediateMov(inputBits))
+        return MovImmediateToRegister;
+    if (checkIfJump(inputBits))
+        return JumpInstruction;
+
+    // ADD
+    if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("000000"))))
+        return AddRegisterToRegister;
+    if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("100000"))))
+        return XImmediateToRegisterOrMemory; // need to check second byte -> could be add, sub, cmp
+    if (checkSevenBitsInRegister(inputBits, std::bitset<7>(std::string("1000010"))))
+        return AddImmediateToAccumulator;
+
+    // SUB
+    if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("001010"))))
+        return SubRegMemoryAndRegToEither;
+    if (checkSevenBitsInRegister(inputBits, std::bitset<7>(std::string("0010110"))))
+        return SubImmediateFromAccumulator;
+
+    // DEC
+    if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("001110"))))
+        return CmpRegisterMemoryAndRegister;
+    if (checkSevenBitsInRegister(inputBits, std::bitset<7>(std::string("0011110"))))
+        return CmpImmediateWithAccumulator;
+
+    return NotFound;
+}
+
+
+
+bool checkIfJump(const TwoBytes &inputBits) {
+    std::vector<std::bitset<8>> jumpBits = getJumpInstructionBytes();
+
+    size_t lastSixBitsSize = 8; // last from right to left
+    size_t nbJumpInstructions = jumpBits.size();
+    for (int j = 0; j < nbJumpInstructions; ++j) {
+        bool result = true;
+        for (int i = 0; i < lastSixBitsSize; ++i)
+        {
+            if (jumpBits[j][i] != inputBits.firstByte[i]) {
+                result = false;
+                break;
+            }
+        }
+        if (result) {
+            return result;
         }
     }
 
-    return result;
+    std::cout << "This was NOT a jump" << std::endl;
+    return false;
+}
+
+std::vector<std::bitset<8>> getJumpInstructionBytes() {
+    std::vector<std::bitset<8>> jumpBits;
+
+    jumpBits.emplace_back("01110101"); // jnz
+    jumpBits.emplace_back("01110100"); // je
+    jumpBits.emplace_back("01111100"); // jl
+    jumpBits.emplace_back("01111110"); // jle
+    jumpBits.emplace_back("01110010"); // jb
+    jumpBits.emplace_back("01110110"); // jbe
+    jumpBits.emplace_back("01111010"); // jp
+    jumpBits.emplace_back("01110000"); // jo
+    jumpBits.emplace_back("01111000"); // js
+    jumpBits.emplace_back("01111101"); // jnl
+    jumpBits.emplace_back("01111111"); // jg
+    jumpBits.emplace_back("01110011"); // jnb
+    jumpBits.emplace_back("01110111"); // ja
+    jumpBits.emplace_back("01111011"); // jnp
+    jumpBits.emplace_back("01110001"); // jno
+    jumpBits.emplace_back("01111001"); // jns
+    jumpBits.emplace_back("11100001"); // loop
+    jumpBits.emplace_back("11100001"); // loopz
+    jumpBits.emplace_back("11100000"); // loopnz
+    jumpBits.emplace_back("11100011"); // jcxz
+
+    return jumpBits;
 }
 
 bool checkIfImmediateMov(const TwoBytes &inputBits) {
@@ -155,19 +270,32 @@ bool checkIfImmediateMov(const TwoBytes &inputBits) {
     return result;
 }
 
-bool checkIfRegToRegMov(const TwoBytes &inputBits) {
-    std::bitset<6> movBits(std::string("100010"));
+bool checkSixBitsInRegister(const TwoBytes &inputBits, const std::bitset<6> &instructionBits) {
     size_t lastSixBitsSize = 6; // last from right to left
     bool result = true;
     for (int i = 0; i < lastSixBitsSize; ++i)
     {
-        // i+2 because movBits is bitset<6> whereas inputBits.firstByte is bitset<8>
-        if (movBits[i] != inputBits.firstByte[i+2]) {
+        // i+2 because instructionBits is bitset<6> whereas inputBits.firstByte is bitset<8>
+        if (instructionBits[i] != inputBits.firstByte[i + 2]) {
             result = false;
             break;
         }
     }
     //std::cout << "This is a 100010" << std::endl;
+    return result;
+}
+
+bool checkSevenBitsInRegister(const TwoBytes &inputBits, const std::bitset<7> &instructionBits) {
+    size_t lastBitsSize = 7; // last from right to left
+    bool result = true;
+    for (int i = 0; i < lastBitsSize; ++i)
+    {
+        // i+1 because instructionBits is bitset<7> whereas inputBits.firstByte is bitset<8>
+        if (instructionBits[i] != inputBits.firstByte[i + 1]) {
+            result = false;
+            break;
+        }
+    }
     return result;
 }
 
@@ -287,35 +415,27 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
             }
         }
         instruction.operation = getOperation(sixteenBits);
+
         if (instruction.operation == MovRegisterToRegister) { // 100010dw
-            int additionalBytesNb = decodeExtraBytesFromMod(sixteenBits, instruction);
-            std::string byteDisplacement;
-            if (instruction.operationMod == MemoryModeNoDisplacement || instruction.operationMod == MemoryMode16Bit || instruction.operationMod == MemoryMode8Bit)
-                byteDisplacement = readExtraBytes(inputFile, additionalBytesNb);
-            decodeRegToRegMovInstruction(sixteenBits, instruction, byteDisplacement);
-
-            std::string instrName = "mov";
-            std::cout << instrName << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
-        } else { // case for 'MovImmediateToRegister, 1011 w reg'
-            //std::cout << "--1011--"<< std::endl;
-            bool readAdditionalByte = decodeImmediateToRegInstruction(sixteenBits, instruction);
-
-            std::cout << "additional byte? : " << readAdditionalByte << std::endl;
-            if (!readAdditionalByte) {
-                instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
-                std::cout << "instruction.sourceReg: " << instruction.sourceReg << std::endl;
-            } else {
-                std::bitset<8> highByte = readExtraByte(inputFile);
-                std::bitset<16> combinedBytes;
-                for (size_t i = 0; i < 8; ++i) {
-                    combinedBytes[i] = sixteenBits.secondByte[i]; // less significant byte
-                    combinedBytes[i + 8] = highByte[i]; // most significant byte
-                }
-
-                instruction.sourceReg = std::to_string(convertTwoByteBases2ToBase10(combinedBytes));
-            }
-            std::string instrName = "mov";
-            std::cout << instrName << " " << instruction.destReg << ", " << instruction.sourceReg << std::endl;
+            outputRegToReg(sixteenBits, inputFile, instruction, "mov");
+        } else if (instruction.operation == AddRegisterToRegister) {
+            outputRegToReg(sixteenBits, inputFile, instruction, "add");
+        } else if (instruction.operation == SubRegMemoryAndRegToEither) {
+            outputRegToReg(sixteenBits, inputFile, instruction, "sub");
+        } else if (instruction.operation == CmpRegisterMemoryAndRegister) {
+            outputRegToReg(sixteenBits, inputFile, instruction, "cmp");
+        } else if (instruction.operation == MovImmediateToRegister) { // case for 'MovImmediateToRegister, 1011 w reg'
+            outputImmediateToReg(sixteenBits, inputFile, instruction, "mov");
+        } else if (instruction.operation == AddImmediateToAccumulator) {
+            outputImmediateToReg(sixteenBits, inputFile, instruction, "add");
+        } else if (instruction.operation == SubImmediateFromAccumulator) {
+            outputImmediateToReg(sixteenBits, inputFile, instruction, "sub");
+        } else if (instruction.operation == CmpImmediateWithAccumulator) {
+            outputImmediateToReg(sixteenBits, inputFile, instruction, "cmp");
+        } else if (instruction.operation == JumpInstruction) {
+            std::unordered_map<std::bitset<8>, std::string, BitsetHash> hashJumpEncoding = getHashJumpEncoding();
+            std::string instrName = hashJumpEncoding[sixteenBits.firstByte];
+            instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
         }
     }
 
@@ -324,12 +444,45 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
     return 0;
 }
 
+void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile,
+                          X8086Instruction &instruction, const std::string &instructionType) {
+    //std::cout << "--1011--"<< std::endl;
+    bool readAdditionalByte = decodeImmediateToRegInstruction(sixteenBits, instruction);
+
+    //std::cout << "additional byte? : " << readAdditionalByte << std::endl;
+    if (!readAdditionalByte) {
+        instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
+    } else {
+        std::bitset<8> highByte = readExtraByte(inputFile);
+        std::bitset<16> combinedBytes;
+        for (size_t i = 0; i < 8; ++i) {
+            combinedBytes[i] = sixteenBits.secondByte[i]; // less significant byte
+            combinedBytes[i + 8] = highByte[i]; // most significant byte
+        }
+
+        instruction.sourceReg = std::to_string(convertTwoByteBases2ToBase10(combinedBytes));
+    }
+    std::string output = instructionType + " " + instruction.destReg + ", " + instruction.sourceReg;
+    std::cout << output << std::endl;
+}
+
+void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType) {
+    int additionalBytesNb = decodeExtraBytesFromMod(sixteenBits, instruction);
+    std::string byteDisplacement;
+    if (instruction.operationMod == MemoryModeNoDisplacement || instruction.operationMod == MemoryMode16Bit || instruction.operationMod == MemoryMode8Bit)
+        byteDisplacement = readExtraBytes(inputFile, additionalBytesNb);
+    decodeRegToRegMovInstruction(sixteenBits, instruction, byteDisplacement);
+
+    std::string output = instructionType + " " +instruction.destReg + ", " + instruction.sourceReg;
+    std::cout << output << std::endl;
+}
+
 std::bitset<8> readExtraByte(std::ifstream &inputFile) {
     unsigned char additionalBytes[1];
     inputFile.read(reinterpret_cast<char *>(additionalBytes), 1);
 
     std::bitset<8> byteDisplacement(additionalBytes[0]);
-    std::cout << "displacement -> " << byteDisplacement.to_ulong() << std::endl;
+    //std::cout << "displacement -> " << byteDisplacement.to_ulong() << std::endl;
 
     return byteDisplacement;
 }
@@ -369,7 +522,7 @@ std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead) {
 
         if (bytesToRead == 1) {
             byteDisplacement = additionalBytes[0];
-            std::cout << "displacement -> " << byteDisplacement << std::endl;
+            //std::cout << "displacement -> " << byteDisplacement << std::endl;
         } else if (bytesToRead == 2) {
             // endian order matters. Little endian -> most significant byte is read 2nd
             byteDisplacement = additionalBytes[0] | (additionalBytes[1] << 8);
@@ -384,11 +537,14 @@ int main()
     std::string listing37AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0037_single_register_mov";
     std::string listing38AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0038_many_register_mov";
     std::string listing39AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0039_more_movs";
+    std::string listing41AssembledPath = "/home/rob/Documents/Github/computer_enhance/hw1/listing_0041_add_sub_cmp_jnz";
 
 /*    std::cout << "--- File 37 ---" << std::endl;
     if(readBinFile(listing37AssembledPath, littleEndian) == 1) { return 1;}
     std::cout << "--- File 38 ---" << std::endl;
     if(readBinFile(listing38AssembledPath, littleEndian) == 1) { return 1;}*/
-    std::cout << "--- File 39 ---" << std::endl;
-    if(readBinFile(listing39AssembledPath, littleEndian) == 1) { return 1;}
+    /*std::cout << "--- File 39 ---" << std::endl;
+    if(readBinFile(listing39AssembledPath, littleEndian) == 1) { return 1;}*/
+    std::cout << "--- File 41 ---" << std::endl;
+    if(readBinFile(listing41AssembledPath, littleEndian) == 1) { return 1;}
 }
