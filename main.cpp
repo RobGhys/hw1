@@ -46,6 +46,7 @@ struct X8086Instruction {
      * 1 -> mov will copy 16 bits
      */
     int wBit{};
+    int sBit{};
     std::string sourceReg;
     std::string destReg;
     OperationMod operationMod{};
@@ -74,6 +75,8 @@ bool checkAddRegToReg(const TwoBytes &bytes);
 void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType);
 
 void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType);
+
+std::string readExtraBytesImmediate(std::ifstream &inputFile, int bytesToRead);
 
 std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> getMODFieldEncoding() {
     std::unordered_map<std::bitset<2>, OperationMod, BitsetHash> result;
@@ -167,6 +170,16 @@ std::unordered_map<std::bitset<8>, std::string, BitsetHash> getHashJumpEncoding(
     return result;
 }
 
+std::unordered_map<std::bitset<3>, std::string, BitsetHash> getHashImmediateModEncoding() {
+    std::unordered_map<std::bitset<3>, std::string, BitsetHash> result;
+
+    result[std::bitset<3>("000")] = "add";
+    result[std::bitset<3>("101")] = "sub";
+    result[std::bitset<3>("111")] = "cmp";
+
+    return result;
+}
+
 OperationName getOperation(const TwoBytes &inputBits) {
     // MOV
     if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("100010"))))
@@ -179,8 +192,6 @@ OperationName getOperation(const TwoBytes &inputBits) {
     // ADD
     if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("000000"))))
         return AddRegisterToRegister;
-    if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("100000"))))
-        return XImmediateToRegisterOrMemory; // need to check second byte -> could be add, sub, cmp
     if (checkSevenBitsInRegister(inputBits, std::bitset<7>(std::string("1000010"))))
         return AddImmediateToAccumulator;
 
@@ -195,6 +206,10 @@ OperationName getOperation(const TwoBytes &inputBits) {
         return CmpRegisterMemoryAndRegister;
     if (checkSevenBitsInRegister(inputBits, std::bitset<7>(std::string("0011110"))))
         return CmpImmediateWithAccumulator;
+
+    // Common for add, sub, dec
+    if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("100000"))))
+        return XImmediateToRegisterOrMemory; // need to check second byte -> could be add, sub, cmp
 
     return NotFound;
 }
@@ -220,7 +235,7 @@ bool checkIfJump(const TwoBytes &inputBits) {
         }
     }
 
-    std::cout << "This was NOT a jump" << std::endl;
+    //std::cout << "This was NOT a jump" << std::endl;
     return false;
 }
 
@@ -433,15 +448,82 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
         } else if (instruction.operation == CmpImmediateWithAccumulator) {
             outputImmediateToReg(sixteenBits, inputFile, instruction, "cmp");
         } else if (instruction.operation == JumpInstruction) {
-            std::unordered_map<std::bitset<8>, std::string, BitsetHash> hashJumpEncoding = getHashJumpEncoding();
+            auto hashJumpEncoding = getHashJumpEncoding();
             std::string instrName = hashJumpEncoding[sixteenBits.firstByte];
             instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
+        } else if (instruction.operation == XImmediateToRegisterOrMemory) {
+            instruction.sBit = sixteenBits.firstByte[1];
+            // right-most bit
+            instruction.wBit = sixteenBits.firstByte[0];
+
+            std::bitset<3> operationField; // could be add, sub, or cmp
+            std::bitset<3> rmField;
+
+            for (size_t j = 0; j < 3; ++j) {
+                operationField[j] = sixteenBits.secondByte[j + 3];
+            }
+
+            for (size_t k = 0; k < 3; ++k) {
+                rmField[k] = sixteenBits.secondByte[k];
+            }
+
+            auto operationTypeHashMap = getHashImmediateModEncoding();
+            auto operationType = operationTypeHashMap[operationField];
+            std::cout << "Operation type : " << operationType << std::endl;
+
+
+            // Get value of 'r/m' register
+            int additionalBytesNb = decodeExtraBytesFromMod(sixteenBits, instruction);
+            std::string byteDisplacement;
+            if (instruction.operationMod == MemoryModeNoDisplacement || instruction.operationMod == MemoryMode16Bit || instruction.operationMod == MemoryMode8Bit)
+                byteDisplacement = readExtraBytes(inputFile, additionalBytesNb);
+
+            std::unordered_map<std::bitset<3>, std::string, BitsetHash>
+                    registerBitsetMap = getHashValuesRegisterFieldEncoding(instruction.wBit);
+
+            // Register to register (MOD 11)
+            if (instruction.operationMod == RegisterMode) {
+                    instruction.destReg = registerBitsetMap[rmField];
+            } else { // Mod is 00, 01 or 10
+                std::unordered_map<std::bitset<3>, std::string, BitsetHash>
+                        effectiveAddressMap = getHashEffAddCalculationFieldEncoding(instruction.operationMod, byteDisplacement);
+                    instruction.destReg = effectiveAddressMap[rmField];
+            }
+
+            // Read source address
+            int dataByte = 1; // for 'data'
+            if (instruction.sBit == 0 && instruction.wBit == 1)
+                dataByte += 1; // another 'data' byte
+
+            std::cout << "Total bytes to read: " << dataByte << std::endl;
+            auto dataByteString = readExtraBytesImmediate(inputFile, dataByte);
+
+            std::string output = operationType + " " +instruction.destReg + ", " + dataByteString;
+            std::cout << output << std::endl;
+        } else { // "1000000"
+            std::cerr << "Operate was not found..." << std::endl;
         }
     }
 
     inputFile.close();
 
     return 0;
+}
+
+std::string readExtraBytesImmediate(std::ifstream &inputFile, int bytesToRead) {
+    int byteDisplacement = 0;
+    unsigned char additionalBytes[2];
+    inputFile.read(reinterpret_cast<char*>(additionalBytes), bytesToRead);
+
+    if (bytesToRead == 1) {
+        byteDisplacement = additionalBytes[0];
+        //std::cout << "displacement -> " << byteDisplacement << std::endl;
+    } else if (bytesToRead == 2) {
+        // endian order matters. Little endian -> most significant byte is read 2nd
+        byteDisplacement = additionalBytes[0] | (additionalBytes[1] << 8);
+    }
+
+    return std::to_string(byteDisplacement);
 }
 
 void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile,
