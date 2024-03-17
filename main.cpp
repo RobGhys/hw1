@@ -186,8 +186,6 @@ OperationName getOperation(const TwoBytes &inputBits) {
         return MovRegisterToRegister;
     if (checkIfImmediateMov(inputBits))
         return MovImmediateToRegister;
-    if (checkIfJump(inputBits))
-        return JumpInstruction;
 
     // ADD
     if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("000000"))))
@@ -211,6 +209,9 @@ OperationName getOperation(const TwoBytes &inputBits) {
     if (checkSixBitsInRegister(inputBits, std::bitset<6>(std::string("100000"))))
         return XImmediateToRegisterOrMemory; // need to check second byte -> could be add, sub, cmp
 
+    if (checkIfJump(inputBits))
+        return JumpInstruction;
+
     return NotFound;
 }
 
@@ -219,11 +220,11 @@ OperationName getOperation(const TwoBytes &inputBits) {
 bool checkIfJump(const TwoBytes &inputBits) {
     std::vector<std::bitset<8>> jumpBits = getJumpInstructionBytes();
 
-    size_t lastSixBitsSize = 8; // last from right to left
+    size_t lastBitsSize = 8; // last from right to left
     size_t nbJumpInstructions = jumpBits.size();
     for (int j = 0; j < nbJumpInstructions; ++j) {
         bool result = true;
-        for (int i = 0; i < lastSixBitsSize; ++i)
+        for (int i = 0; i < lastBitsSize; ++i)
         {
             if (jumpBits[j][i] != inputBits.firstByte[i]) {
                 result = false;
@@ -235,7 +236,6 @@ bool checkIfJump(const TwoBytes &inputBits) {
         }
     }
 
-    //std::cout << "This was NOT a jump" << std::endl;
     return false;
 }
 
@@ -451,6 +451,7 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
             auto hashJumpEncoding = getHashJumpEncoding();
             std::string instrName = hashJumpEncoding[sixteenBits.firstByte];
             instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
+            std::cout << instrName << " " << instruction.sourceReg << std::endl;
         } else if (instruction.operation == XImmediateToRegisterOrMemory) {
             instruction.sBit = sixteenBits.firstByte[1];
             // right-most bit
@@ -469,7 +470,7 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
 
             auto operationTypeHashMap = getHashImmediateModEncoding();
             auto operationType = operationTypeHashMap[operationField];
-            std::cout << "Operation type : " << operationType << std::endl;
+            //std::cout << "Operation type : " << operationType << std::endl;
 
 
             // Get value of 'r/m' register
@@ -495,13 +496,15 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
             if (instruction.sBit == 0 && instruction.wBit == 1)
                 dataByte += 1; // another 'data' byte
 
-            std::cout << "Total bytes to read: " << dataByte << std::endl;
+            //std::cout << "Total bytes to read: " << dataByte << std::endl;
             auto dataByteString = readExtraBytesImmediate(inputFile, dataByte);
 
-            std::string output = operationType + " " +instruction.destReg + ", " + dataByteString;
+            std::string output = operationType;
+            output += " " + instruction.destReg + ", " + dataByteString;
+
             std::cout << output << std::endl;
         } else { // "1000000"
-            std::cerr << "Operate was not found..." << std::endl;
+            std::cerr << "Operation was not found..." << std::endl;
         }
     }
 
