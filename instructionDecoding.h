@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <bitset>
+#include <unordered_map>
 
 
 struct TwoBytes {
@@ -55,15 +56,15 @@ struct X8086Instruction {
     OperationMod operationMod{};
 };
 
-X8086Instruction &decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits);
-void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction);
+std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits);
+std::string decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction);
 int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instruction);
-void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType);
-void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType);
+std::string outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType, std::unordered_map<std::string, int> &registerValueMap);
+std::string outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType, std::unordered_map<std::string, int> &registerValueMap);
 bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction);
 void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &instruction,
                                   const std::string& byteDisplacement);
-void decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &operationType);
+std::string decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &operationType, std::unordered_map<std::string, int> &registerValueMap);
 bool checkIfJump(const TwoBytes &inputBits);
 bool checkIfImmediateMov(const TwoBytes &inputBits);
 

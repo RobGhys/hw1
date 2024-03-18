@@ -9,4 +9,6 @@ add_executable(hw1 main.cpp
         instructionDecoding.cpp
         instructionDecoding.h
         byteReader.cpp
-        byteReader.h)
+        byteReader.h
+        registerState.cpp
+        registerState.h)

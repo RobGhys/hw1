@@ -6,17 +6,16 @@
 #include "instructionDecoding.h"
 #include "decodingHashMaps.h"
 #include "byteReader.h"
+#include "registerState.h"
 
-X8086Instruction &decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits) {
+std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits) {
     auto hashJumpEncoding = getHashJumpEncoding();
     std::string instrName = hashJumpEncoding[sixteenBits.firstByte];
     instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
-    std::cout << instrName << " " << instruction.sourceReg << std::endl;
-
-    return instruction;
+    return instrName + " " + instruction.sourceReg;
 }
 
-void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction) {
+std::string decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction) {
     instruction.sBit = sixteenBits.firstByte[1];
     // right-most bit
     instruction.wBit = sixteenBits.firstByte[0];
@@ -87,7 +86,7 @@ void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inpu
         output += " " + instruction.destReg + ", " + dataBytes;
 
     }
-    std::cout << output << std::endl;
+    return output;
 }
 
 int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instruction) {
@@ -112,14 +111,16 @@ int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instr
     return -1; // problem
 }
 
-void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile,
-                          X8086Instruction &instruction, const std::string &instructionType) {
+std::string outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile,
+                          X8086Instruction &instruction, const std::string &instructionType, std::unordered_map<std::string, int> &registerValueMap) {
     //std::cout << "--1011--"<< std::endl;
     bool readAdditionalByte = decodeImmediateToRegInstruction(sixteenBits, instruction);
 
     //std::cout << "additional byte? : " << readAdditionalByte << std::endl;
     if (!readAdditionalByte) {
         instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
+        // actually do the operation on register
+        updateRegisterValueMap(registerValueMap, instruction.destReg, convertOneByteBase2ToBase10(sixteenBits.secondByte));
     } else {
         std::bitset<8> highByte = readExtraByte(inputFile);
         std::bitset<16> combinedBytes;
@@ -129,20 +130,26 @@ void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile,
         }
 
         instruction.sourceReg = std::to_string(convertTwoByteBases2ToBase10(combinedBytes));
+        // actually do the operation on register
+        updateRegisterValueMap(registerValueMap, instruction.destReg, convertTwoByteBases2ToBase10(combinedBytes));
+
     }
-    std::string output = instructionType + " " + instruction.destReg + ", " + instruction.sourceReg;
-    std::cout << output << std::endl;
+
+    return instructionType + " " + instruction.destReg + ", " + instruction.sourceReg;
 }
 
-void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType) {
+std::string outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType, std::unordered_map<std::string, int> &registerValueMap) {
     int additionalBytesNb = getModAndDecodeExtraBytes(sixteenBits, instruction);
     std::string byteDisplacement;
     if (instruction.operationMod == MemoryModeNoDisplacement || instruction.operationMod == MemoryMode16Bit || instruction.operationMod == MemoryMode8Bit)
         byteDisplacement = readExtraBytes(inputFile, additionalBytesNb);
     decodeRegToRegMovInstruction(sixteenBits, instruction, byteDisplacement);
 
-    std::string output = instructionType + " " + instruction.destReg + ", " + instruction.sourceReg;
-    std::cout << output << std::endl;
+    // actually do the operation on register
+    int valueOfSourceReg = registerValueMap[instruction.sourceReg];
+    updateRegisterValueMap(registerValueMap, instruction.destReg, valueOfSourceReg);
+
+    return instructionType + " " + instruction.destReg + ", " + instruction.sourceReg;
 }
 
 bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction) {
@@ -211,7 +218,8 @@ void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &i
     }
 }
 
-void decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &operationType) {
+std::string decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction,
+                                 const std::string &operationType, std::unordered_map<std::string, int> &registerValueMap) {
     instruction.wBit = sixteenBits.firstByte[0];
     if (instruction.wBit == 0) {
         instruction.destReg = "al";
@@ -228,8 +236,7 @@ void decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile,
 
         instruction.sourceReg = std::to_string(convertTwoByteBases2ToBase10(combinedBytes));
     }
-    std::string output = operationType + " " + instruction.destReg + ", " + instruction.sourceReg;
-    std::cout << output << std::endl;
+    return operationType + " " + instruction.destReg + ", " + instruction.sourceReg;
 }
 
 bool checkIfJump(const TwoBytes &inputBits) {

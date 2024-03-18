@@ -5,6 +5,8 @@
 
 #include "instructionDecoding.h"
 #include "byteReader.h"
+#include "registerState.h"
+
 
 OperationName getOperation(const TwoBytes &inputBits) {
     // MOV
@@ -41,13 +43,17 @@ OperationName getOperation(const TwoBytes &inputBits) {
     return NotFound;
 }
 
-int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
+std::vector<std::string> readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
+    std::vector<std::string> instructionPrinter;
+
     std::ifstream inputFile(listingXAssembledPath, std::ios::binary);
     if (!inputFile)
     {
         std::cerr << "Could not open file." << std::endl;
-        return 1;
+        return instructionPrinter;
     }
+
+    auto registerValueMap = initializeRegisterValueMap();
 
     uint16_t twoBytes;
     std::bitset<16> binaryTwoBytes;
@@ -61,34 +67,34 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
 
         switch (instruction.operation) {
             case MovRegisterToRegister:
-                outputRegToReg(sixteenBits, inputFile, instruction, "mov");
+                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "mov", registerValueMap));
                 break;
             case AddRegisterToRegister:
-                outputRegToReg(sixteenBits, inputFile, instruction, "add");
+                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "add", registerValueMap));
                 break;
             case SubRegMemoryAndRegToEither:
-                outputRegToReg(sixteenBits, inputFile, instruction, "sub");
+                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "sub", registerValueMap));
                 break;
             case CmpRegisterMemoryAndRegister:
-                outputRegToReg(sixteenBits, inputFile, instruction, "cmp");
+                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "cmp", registerValueMap));
                 break;
             case MovImmediateToRegister:
-                outputImmediateToReg(sixteenBits, inputFile, instruction, "mov");
+                instructionPrinter.emplace_back(outputImmediateToReg(sixteenBits, inputFile, instruction, "mov", registerValueMap));
                 break;
             case AddImmediateToAccumulator:
-                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "add");
+                instructionPrinter.emplace_back(decodeImmediateToAcc(sixteenBits, inputFile, instruction, "add", registerValueMap));
                 break;
             case SubImmediateFromAccumulator:
-                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "sub");
+                instructionPrinter.emplace_back(decodeImmediateToAcc(sixteenBits, inputFile, instruction, "sub", registerValueMap));
                 break;
             case CmpImmediateWithAccumulator:
-                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "cmp");
+                instructionPrinter.emplace_back(decodeImmediateToAcc(sixteenBits, inputFile, instruction, "cmp", registerValueMap));
                 break;
             case JumpInstruction:
-                instruction = decodeJumpInstruction(instruction, sixteenBits);
+                instructionPrinter.emplace_back(decodeJumpInstruction(instruction, sixteenBits));
                 break;
             case XImmediateToRegisterOrMemory:
-                decodeImmediateInstruction(sixteenBits, inputFile, instruction);
+                instructionPrinter.emplace_back(decodeImmediateInstruction(sixteenBits, inputFile, instruction));
                 break;
             default:
                 std::cerr << "Operation was not found..." << std::endl;
@@ -98,12 +104,20 @@ int readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
 
     inputFile.close();
 
-    return 0;
+    // print final state of registers
+    printRegisterValueMap(registerValueMap);
+
+    return instructionPrinter;
 }
 
 int main(int argc, char *argv[])
 {
     bool littleEndian = true;
     std::string assembledPath = argv[1];
-    if(readBinFile(assembledPath, littleEndian) == 1) { return 1;}
+    std::vector<std::string> instructionsVector = readBinFile(assembledPath, littleEndian);
+
+    for (const std::string& instruction : instructionsVector) {
+        std::cout << instruction << std::endl;
+    }
+
 }
