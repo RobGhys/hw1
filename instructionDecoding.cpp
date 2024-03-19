@@ -3,10 +3,20 @@
 //
 
 #include <vector>
+#include <iomanip>
 #include "instructionDecoding.h"
 #include "decodingHashMaps.h"
 #include "byteReader.h"
 #include "registerState.h"
+
+void showAsHexa(int intValue) {
+    std::cout << "IP : 0x"
+              << std::setfill('0') << std::setw(4)
+              << std::hex
+              << intValue
+              << " (" << std::dec << intValue << ")"
+              << std::endl;
+}
 
 std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits) {
     auto hashJumpEncoding = getHashJumpEncoding();
@@ -15,7 +25,7 @@ std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes 
     return instrName + " " + instruction.sourceReg;
 }
 
-void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, ProgramOutput &programOutput) {
+void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, ProgramOutput &programOutput, InstructionPointer &ip) {
     instruction.sBit = sixteenBits.firstByte[1];
     // right-most bit
     instruction.wBit = sixteenBits.firstByte[0];
@@ -58,17 +68,18 @@ void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inpu
     // Register to register (MOD 11)
     if (instruction.operationMod == RegisterMode) {
         instruction.destReg = registerBitsetMap[rmField];
-        // Read and do nothing, ignore DISP-HI
-        //readExtraByteAndDoNothing(inputFile);
         instruction.sourceReg = readExtraBytes(inputFile, 2);
+        ip.ip += 4; // two first bytes, data, data (no disp-lo or disp-high)
     } else { // Mod is 00, 01 or 10
         if (rmField != std::bitset<3>("110")) {
             std::unordered_map<std::bitset<3>, std::string, BitsetHash>
                     effectiveAddressMap = getHashEffAddCalculationFieldEncoding(instruction.operationMod, byteDisplacement);
             instruction.destReg = effectiveAddressMap[rmField];
+            ip.ip += 1;
         } else { // DIRECT ADDRESS case
             //std::cout << "Special case r/m is 110." << std::endl;
             auto twoBytesDisplacement = readExtraBytes(inputFile, 2);
+            ip.ip += 2;
             instruction.destReg = twoBytesDisplacement;
         }
 
@@ -79,6 +90,8 @@ void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inpu
         }
 
         instruction.sourceReg = readDataBytes(inputFile);
+
+        ip.ip += 3; // two first bytes, 1 for data
     }
 
     //std::cout << "Total bytes to read: " << dataByte << std::endl;
@@ -92,7 +105,7 @@ void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inpu
 
     // actually do the operation on register
     computeDirectAddSubCmpAndSetZeroFlag(instruction, operationType, programOutput);
-
+    showAsHexa(ip.ip);
     programOutput.instructionPrinter.emplace_back(output);
 }
 
@@ -118,8 +131,8 @@ int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instr
     return -1; // problem
 }
 
-void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile,
-                          X8086Instruction &instruction, const std::string &instructionType, ProgramOutput &programOutput) {
+void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction,
+                          const std::string &instructionType, ProgramOutput &programOutput, InstructionPointer &ip) {
     //std::cout << "--1011--"<< std::endl;
     bool readAdditionalByte = decodeImmediateToRegInstruction(sixteenBits, instruction);
 
@@ -156,10 +169,12 @@ void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile,
         }
     }
 
+    ip.ip += 2 + readAdditionalByte ; // first byte + data + data if w = 1
+    showAsHexa(ip.ip);
     programOutput.instructionPrinter.emplace_back(instructionType + " " + instruction.destReg + ", " + instruction.sourceReg);
 }
 
-void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType, ProgramOutput &programOutput) {
+void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType, ProgramOutput &programOutput, InstructionPointer &ip) {
     int additionalBytesNb = getModAndDecodeExtraBytes(sixteenBits, instruction);
     std::string byteDisplacement;
     if (instruction.operationMod == MemoryModeNoDisplacement || instruction.operationMod == MemoryMode16Bit || instruction.operationMod == MemoryMode8Bit)
@@ -168,7 +183,8 @@ void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086
 
     // actually do the operation on register
     computeAddSubCmpAndSetZeroFlag(instruction, instructionType, programOutput);
-
+    ip.ip += 2 + additionalBytesNb ; // first + second bytes + 1 (DISP-LO) or 2 (DISP-HI) for the displacements
+    showAsHexa(ip.ip);
     programOutput.instructionPrinter.emplace_back(instructionType + " " + instruction.destReg + ", " + instruction.sourceReg);
 }
 
@@ -295,11 +311,12 @@ void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &i
 }
 
 void decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction,
-                                 const std::string &operationType, ProgramOutput &programOutput) {
+                                 const std::string &operationType, ProgramOutput &programOutput, InstructionPointer &ip) {
     instruction.wBit = sixteenBits.firstByte[0];
     if (instruction.wBit == 0) {
         instruction.destReg = "al";
         instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
+        ip.ip += 2; // first byte, data, data if w = 1
     } else {
         instruction.destReg = "ax";
 
@@ -311,10 +328,12 @@ void decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile,
         }
 
         instruction.sourceReg = std::to_string(convertTwoByteBases2ToBase10(combinedBytes));
+        ip.ip += 3; // first byte, data, data if w = 1
     }
 
     // actually do the operation on register
     computeAddSubCmpAndSetZeroFlag(instruction, operationType, programOutput);
+    showAsHexa(ip.ip);
     programOutput.instructionPrinter.emplace_back(operationType + " " + instruction.destReg + ", " + instruction.sourceReg);
 }
 

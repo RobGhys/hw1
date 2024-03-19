@@ -67,44 +67,46 @@ ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleE
 
     uint16_t twoBytes;
     std::bitset<16> binaryTwoBytes;
-    X8086Instruction instruction{};
     TwoBytes sixteenBits{};
+    InstructionPointer ip{};
 
     while (inputFile.read(reinterpret_cast<char*>(&twoBytes), sizeof(twoBytes))) {
+        X8086Instruction instruction{};
+
         sixteenBits = getSixteenBits(littleEndian, twoBytes, binaryTwoBytes, sixteenBits);
         instruction.operation = getOperation(sixteenBits);
         //addBinaryToStringVector(programOutput.instructionPrinter, sixteenBits); // debugging
 
         switch (instruction.operation) {
             case MovRegisterToRegister:
-                outputRegToReg(sixteenBits, inputFile, instruction, "mov", programOutput);
+                outputRegToReg(sixteenBits, inputFile, instruction, "mov", programOutput, ip);
                 break;
             case AddRegisterToRegister:
-                outputRegToReg(sixteenBits, inputFile, instruction, "add", programOutput);
+                outputRegToReg(sixteenBits, inputFile, instruction, "add", programOutput, ip);
                 break;
             case SubRegMemoryAndRegToEither:
-                outputRegToReg(sixteenBits, inputFile, instruction, "sub", programOutput);
+                outputRegToReg(sixteenBits, inputFile, instruction, "sub", programOutput, ip);
                 break;
             case CmpRegisterMemoryAndRegister:
-                outputRegToReg(sixteenBits, inputFile, instruction, "cmp", programOutput);
+                outputRegToReg(sixteenBits, inputFile, instruction, "cmp", programOutput, ip);
                 break;
             case MovImmediateToRegister:
-                outputImmediateToReg(sixteenBits, inputFile, instruction, "mov", programOutput);
+                outputImmediateToReg(sixteenBits, inputFile, instruction, "mov", programOutput, ip);
                 break;
             case AddImmediateToAccumulator:
-                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "add", programOutput);
+                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "add", programOutput, ip);
                 break;
             case SubImmediateFromAccumulator:
-                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "sub", programOutput);
+                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "sub", programOutput, ip);
                 break;
             case CmpImmediateWithAccumulator:
-                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "cmp", programOutput);
+                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "cmp", programOutput, ip);
                 break;
             case JumpInstruction:
                 decodeJumpInstruction(instruction, sixteenBits);
                 break;
             case XImmediateToRegisterOrMemory:
-                decodeImmediateInstruction(sixteenBits, inputFile, instruction, programOutput);
+                decodeImmediateInstruction(sixteenBits, inputFile, instruction, programOutput, ip);
                 break;
             default:
                 std::cerr << "Operation was not found : " << sixteenBits.firstByte << " " << sixteenBits.secondByte << std::endl;
@@ -113,6 +115,8 @@ ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleE
     }
 
     inputFile.close();
+
+    programOutput.instructionPointer = ip.ip;
 
     return programOutput;
 }
@@ -132,5 +136,6 @@ int main(int argc, char *argv[])
     printRegisterValueMap(programOutput.registerValueMap);
 
     std::cout << "\n=== Flags ===" << std::endl << "Z -> " << programOutput.flags.zeroFlag << " | S -> " << programOutput.flags.signFlag << std::endl;
-
+    std::cout << "\n=== IP ===" << std::endl;
+    showAsHexa(programOutput.instructionPointer);
 }
