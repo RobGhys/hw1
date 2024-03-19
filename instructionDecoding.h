@@ -8,7 +8,12 @@
 #include <iostream>
 #include <bitset>
 #include <unordered_map>
+#include <vector>
 
+struct ProgramOutput {
+    std::vector<std::string> instructionPrinter;
+    std::unordered_map<std::string, int> registerValueMap;
+};
 
 struct TwoBytes {
     std::bitset<8> firstByte;
@@ -59,12 +64,11 @@ struct X8086Instruction {
 std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits);
 std::string decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction);
 int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instruction);
-std::string outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType, std::unordered_map<std::string, int> &registerValueMap);
-std::string outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType, std::unordered_map<std::string, int> &registerValueMap);
+void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType, ProgramOutput &programOutput);
+void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType, ProgramOutput &programOutput);
 bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction);
-void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &instruction,
-                                  const std::string& byteDisplacement);
-std::string decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &operationType, std::unordered_map<std::string, int> &registerValueMap);
+void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &instruction, const std::string& byteDisplacement);
+void decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &operationType, ProgramOutput &programOutput);
 bool checkIfJump(const TwoBytes &inputBits);
 bool checkIfImmediateMov(const TwoBytes &inputBits);
 

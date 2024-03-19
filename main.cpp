@@ -43,17 +43,18 @@ OperationName getOperation(const TwoBytes &inputBits) {
     return NotFound;
 }
 
-std::vector<std::string> readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
-    std::vector<std::string> instructionPrinter;
+ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
+    ProgramOutput programOutput;
+
+    programOutput.instructionPrinter = std::vector<std::string>{};
+    programOutput.registerValueMap =initializeRegisterValueMap();
 
     std::ifstream inputFile(listingXAssembledPath, std::ios::binary);
     if (!inputFile)
     {
         std::cerr << "Could not open file." << std::endl;
-        return instructionPrinter;
+        return programOutput;
     }
-
-    auto registerValueMap = initializeRegisterValueMap();
 
     uint16_t twoBytes;
     std::bitset<16> binaryTwoBytes;
@@ -67,34 +68,34 @@ std::vector<std::string> readBinFile(const std::string &listingXAssembledPath, b
 
         switch (instruction.operation) {
             case MovRegisterToRegister:
-                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "mov", registerValueMap));
+                outputRegToReg(sixteenBits, inputFile, instruction, "mov", programOutput);
                 break;
             case AddRegisterToRegister:
-                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "add", registerValueMap));
+                outputRegToReg(sixteenBits, inputFile, instruction, "add", programOutput);
                 break;
             case SubRegMemoryAndRegToEither:
-                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "sub", registerValueMap));
+                outputRegToReg(sixteenBits, inputFile, instruction, "sub", programOutput);
                 break;
             case CmpRegisterMemoryAndRegister:
-                instructionPrinter.emplace_back(outputRegToReg(sixteenBits, inputFile, instruction, "cmp", registerValueMap));
+                outputRegToReg(sixteenBits, inputFile, instruction, "cmp", programOutput);
                 break;
             case MovImmediateToRegister:
-                instructionPrinter.emplace_back(outputImmediateToReg(sixteenBits, inputFile, instruction, "mov", registerValueMap));
+                outputImmediateToReg(sixteenBits, inputFile, instruction, "mov", programOutput);
                 break;
             case AddImmediateToAccumulator:
-                instructionPrinter.emplace_back(decodeImmediateToAcc(sixteenBits, inputFile, instruction, "add", registerValueMap));
+                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "add", programOutput);
                 break;
             case SubImmediateFromAccumulator:
-                instructionPrinter.emplace_back(decodeImmediateToAcc(sixteenBits, inputFile, instruction, "sub", registerValueMap));
+                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "sub", programOutput);
                 break;
             case CmpImmediateWithAccumulator:
-                instructionPrinter.emplace_back(decodeImmediateToAcc(sixteenBits, inputFile, instruction, "cmp", registerValueMap));
+                decodeImmediateToAcc(sixteenBits, inputFile, instruction, "cmp", programOutput);
                 break;
             case JumpInstruction:
-                instructionPrinter.emplace_back(decodeJumpInstruction(instruction, sixteenBits));
+                decodeJumpInstruction(instruction, sixteenBits);
                 break;
             case XImmediateToRegisterOrMemory:
-                instructionPrinter.emplace_back(decodeImmediateInstruction(sixteenBits, inputFile, instruction));
+                decodeImmediateInstruction(sixteenBits, inputFile, instruction);
                 break;
             default:
                 std::cerr << "Operation was not found..." << std::endl;
@@ -104,20 +105,20 @@ std::vector<std::string> readBinFile(const std::string &listingXAssembledPath, b
 
     inputFile.close();
 
-    // print final state of registers
-    printRegisterValueMap(registerValueMap);
-
-    return instructionPrinter;
+    return programOutput;
 }
 
 int main(int argc, char *argv[])
 {
     bool littleEndian = true;
     std::string assembledPath = argv[1];
-    std::vector<std::string> instructionsVector = readBinFile(assembledPath, littleEndian);
 
-    for (const std::string& instruction : instructionsVector) {
+    ProgramOutput programOutput = readBinFile(assembledPath, littleEndian);
+
+    for (const std::string& instruction : programOutput.instructionPrinter) {
         std::cout << instruction << std::endl;
     }
 
+    std::cout << "=== Registers state == " << std::endl;
+    printRegisterValueMap(programOutput.registerValueMap);
 }

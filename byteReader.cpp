@@ -45,8 +45,8 @@ std::string readDataBytes(std::ifstream &inputFile) {
     return std::to_string(byteDisplacement);
 }
 
-unsigned int convertOneByteBase2ToBase10(const std::bitset<8> &secondByte) {
-    unsigned int result = 0;
+int convertOneByteBase2ToBase10(const std::bitset<8> &secondByte) {
+    int result = 0;
     for (size_t i = 0; i < 8; ++i) {
         if (secondByte[i]) {
             result += 1 << i;
@@ -56,8 +56,8 @@ unsigned int convertOneByteBase2ToBase10(const std::bitset<8> &secondByte) {
     return result;
 }
 
-unsigned int convertTwoByteBases2ToBase10(const std::bitset<16> &bytes) {
-    unsigned int result = 0;
+int convertTwoByteBases2ToBase10(const std::bitset<16> &bytes) {
+    int result = 0;
     for (size_t i = 0; i < 16; ++i) {
         if (bytes[i]) {
             result += 1 << i;

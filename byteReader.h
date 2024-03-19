@@ -12,8 +12,8 @@
 std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead);
 std::string readDataBytes(std::ifstream &inputFile);
 std::bitset<8> readExtraByte(std::ifstream &inputFile);
-unsigned int convertOneByteBase2ToBase10(const std::bitset<8> &secondByte);
-unsigned int convertTwoByteBases2ToBase10(const std::bitset<16> &bytes);
+int convertOneByteBase2ToBase10(const std::bitset<8> &secondByte);
+int convertTwoByteBases2ToBase10(const std::bitset<16> &bytes);
 std::vector<std::bitset<8>> getJumpInstructionBytes();
 bool checkSixBitsInRegister(const TwoBytes &inputBits, const std::bitset<6> &instructionBits);
 bool checkSevenBitsInRegister(const TwoBytes &inputBits, const std::bitset<7> &instructionBits);
