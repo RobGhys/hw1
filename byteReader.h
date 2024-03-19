@@ -18,5 +18,6 @@ std::vector<std::bitset<8>> getJumpInstructionBytes();
 bool checkSixBitsInRegister(const TwoBytes &inputBits, const std::bitset<6> &instructionBits);
 bool checkSevenBitsInRegister(const TwoBytes &inputBits, const std::bitset<7> &instructionBits);
 TwoBytes &getSixteenBits(bool littleEndian, uint16_t twoBytes, std::bitset<16> &binaryTwoBytes, TwoBytes &sixteenBits);
+void readExtraByteAndDoNothing(std::ifstream &inputFile);
 
 #endif //HW1_BYTEREADER_H

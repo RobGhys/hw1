@@ -43,6 +43,15 @@ OperationName getOperation(const TwoBytes &inputBits) {
     return NotFound;
 }
 
+void addBinaryToStringVector(std::vector<std::string>& outputVector, const TwoBytes& twoBytes) {
+    std::string firstByteStr = twoBytes.firstByte.to_string();
+    std::string secondByteStr = twoBytes.secondByte.to_string();
+
+    std::string combined = firstByteStr + " " + secondByteStr;
+
+    outputVector.push_back(combined);
+}
+
 ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleEndian) {
     ProgramOutput programOutput;
 
@@ -58,13 +67,13 @@ ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleE
 
     uint16_t twoBytes;
     std::bitset<16> binaryTwoBytes;
-    X8086Instruction instruction;
+    X8086Instruction instruction{};
     TwoBytes sixteenBits{};
 
     while (inputFile.read(reinterpret_cast<char*>(&twoBytes), sizeof(twoBytes))) {
         sixteenBits = getSixteenBits(littleEndian, twoBytes, binaryTwoBytes, sixteenBits);
         instruction.operation = getOperation(sixteenBits);
-        //std::cout << sixteenBits.firstByte << " " << sixteenBits.secondByte << std::endl;
+        //addBinaryToStringVector(programOutput.instructionPrinter, sixteenBits); // debugging
 
         switch (instruction.operation) {
             case MovRegisterToRegister:
@@ -95,10 +104,10 @@ ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleE
                 decodeJumpInstruction(instruction, sixteenBits);
                 break;
             case XImmediateToRegisterOrMemory:
-                decodeImmediateInstruction(sixteenBits, inputFile, instruction);
+                decodeImmediateInstruction(sixteenBits, inputFile, instruction, programOutput);
                 break;
             default:
-                std::cerr << "Operation was not found..." << std::endl;
+                std::cerr << "Operation was not found : " << sixteenBits.firstByte << " " << sixteenBits.secondByte << std::endl;
                 break;
         }
     }
@@ -119,6 +128,9 @@ int main(int argc, char *argv[])
         std::cout << instruction << std::endl;
     }
 
-    std::cout << "=== Registers state == " << std::endl;
+    std::cout << "=== Registers state ==" << std::endl;
     printRegisterValueMap(programOutput.registerValueMap);
+
+    std::cout << "=== Flags ===" << std::endl << "Z -> " << programOutput.flags.zeroFlag << " | S -> " << programOutput.flags.signFlag << std::endl;
+
 }

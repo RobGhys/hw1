@@ -10,9 +10,15 @@
 #include <unordered_map>
 #include <vector>
 
+struct InstructionFlags {
+    bool signFlag = false;
+    bool zeroFlag = false;
+};
+
 struct ProgramOutput {
     std::vector<std::string> instructionPrinter;
     std::unordered_map<std::string, int> registerValueMap;
+    InstructionFlags flags;
 };
 
 struct TwoBytes {
@@ -62,7 +68,7 @@ struct X8086Instruction {
 };
 
 std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits);
-std::string decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction);
+void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, ProgramOutput &programOutput);
 int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instruction);
 void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType, ProgramOutput &programOutput);
 void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string& instructionType, ProgramOutput &programOutput);

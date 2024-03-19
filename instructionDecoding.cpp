@@ -8,6 +8,8 @@
 #include "byteReader.h"
 #include "registerState.h"
 
+void checkZeroFlag(ProgramOutput &programOutput, int newValue);
+
 std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits) {
     auto hashJumpEncoding = getHashJumpEncoding();
     std::string instrName = hashJumpEncoding[sixteenBits.firstByte];
@@ -15,7 +17,7 @@ std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes 
     return instrName + " " + instruction.sourceReg;
 }
 
-std::string decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction) {
+void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, ProgramOutput &programOutput) {
     instruction.sBit = sixteenBits.firstByte[1];
     // right-most bit
     instruction.wBit = sixteenBits.firstByte[0];
@@ -58,6 +60,9 @@ std::string decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstrea
     // Register to register (MOD 11)
     if (instruction.operationMod == RegisterMode) {
         instruction.destReg = registerBitsetMap[rmField];
+        // Read and do nothing, ignore DISP-HI
+        //readExtraByteAndDoNothing(inputFile);
+        instruction.sourceReg = readExtraBytes(inputFile, 2);
     } else { // Mod is 00, 01 or 10
         if (rmField != std::bitset<3>("110")) {
             std::unordered_map<std::bitset<3>, std::string, BitsetHash>
@@ -74,19 +79,19 @@ std::string decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstrea
         } else {
             operationSize = "word";
         }
+
+        instruction.sourceReg = readDataBytes(inputFile);
     }
 
     //std::cout << "Total bytes to read: " << dataByte << std::endl;
-    auto dataBytes = readDataBytes(inputFile);
 
     std::string output = operationType;
     if (!operationSize.empty()) {
-        output += " " + operationSize + " " + instruction.destReg + ", " + dataBytes;
+        output += " " + operationSize + " " + instruction.destReg + ", " + instruction.sourceReg;
     } else {
-        output += " " + instruction.destReg + ", " + dataBytes;
-
+        output += " " + instruction.destReg + ", " + instruction.sourceReg;
     }
-    return output;
+    programOutput.instructionPrinter.emplace_back(output);
 }
 
 int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instruction) {
@@ -101,11 +106,11 @@ int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instr
     instruction.operationMod = modBitsetMap[modField];
     //std::cout << "Modfield -> " << modField << std::endl;
 
-    if (instruction.operationMod == RegisterMode || instruction.operationMod == MemoryModeNoDisplacement)
+    if (instruction.operationMod == RegisterMode || instruction.operationMod == MemoryModeNoDisplacement) // MOD 00 or MOD 11
         return 0;
-    else if (instruction.operationMod == MemoryMode8Bit)
+    else if (instruction.operationMod == MemoryMode8Bit) // MOD 01
         return 1;
-    else if (instruction.operationMod == MemoryMode16Bit)
+    else if (instruction.operationMod == MemoryMode16Bit) // MOD 10
         return 2;
 
     return -1; // problem
@@ -146,10 +151,34 @@ void outputRegToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086
     decodeRegToRegMovInstruction(sixteenBits, instruction, byteDisplacement);
 
     // actually do the operation on register
-    int valueOfSourceReg = programOutput.registerValueMap[instruction.sourceReg];
-    updateRegisterValueMap(programOutput.registerValueMap, instruction.destReg, valueOfSourceReg);
+    int newValue;
+
+    if (instructionType == "cmp") { // no modification on register
+        newValue = programOutput.registerValueMap[instruction.sourceReg] - programOutput.registerValueMap[instruction.destReg];
+    } else {
+        if (instructionType == "mov") {
+            newValue = programOutput.registerValueMap[instruction.sourceReg];
+        } else if (instructionType == "add") {
+            newValue = programOutput.registerValueMap[instruction.sourceReg] + programOutput.registerValueMap[instruction.destReg];
+        } else { // sub
+            newValue = programOutput.registerValueMap[instruction.sourceReg] - programOutput.registerValueMap[instruction.destReg];
+        }
+        // Executed in all cases
+        updateRegisterValueMap(programOutput.registerValueMap, instruction.destReg, newValue);
+    }
+
+    checkZeroFlag(programOutput, newValue); // executed for all instructions
 
     programOutput.instructionPrinter.emplace_back(instructionType + " " + instruction.destReg + ", " + instruction.sourceReg);
+}
+
+void checkZeroFlag(ProgramOutput &programOutput, int newValue) {
+    if (newValue == 0) {
+        programOutput.flags.zeroFlag = true;
+        std::cout << "Z -> " << newValue << std::endl;
+    } else {
+        programOutput.flags.zeroFlag = false;
+    }
 }
 
 bool decodeImmediateToRegInstruction(const TwoBytes &inputBits, X8086Instruction &instruction) {

@@ -27,22 +27,30 @@ std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead) {
 
         if (bytesToRead == 1) {
             byteDisplacement = additionalBytes[0];
-            //std::cout << "displacement -> " << byteDisplacement << std::endl;
+            /*std::bitset<8> binaryRepresentation(additionalBytes[0]);
+            std::cout << "bits: " << binaryRepresentation << std::endl;*/
         } else if (bytesToRead == 2) {
             // endian order matters. Little endian -> most significant byte is read 2nd
             byteDisplacement = additionalBytes[0] | (additionalBytes[1] << 8);
+/*            std::bitset<16> binaryRepresentation(additionalBytes[0] | (additionalBytes[1] << 8));
+            std::cout << "bits: " << binaryRepresentation << std::endl;*/
         }
     }
+
     return std::to_string(byteDisplacement);
 }
 
+void readExtraByteAndDoNothing(std::ifstream &inputFile) {
+    unsigned char additionalBytes[1];
+    inputFile.read(reinterpret_cast<char*>(additionalBytes), 1);
+}
+
 std::string readDataBytes(std::ifstream &inputFile) {
-    int byteDisplacement = 0;
     unsigned char additionalBytes[2];
     inputFile.read(reinterpret_cast<char*>(additionalBytes), 1);
-
-    byteDisplacement = additionalBytes[0];
-    return std::to_string(byteDisplacement);
+    std::bitset<8> binaryRepresentation(additionalBytes[0]);
+    std::cout << "bits: " << binaryRepresentation << std::endl;
+    return std::to_string(additionalBytes[0]);
 }
 
 int convertOneByteBase2ToBase10(const std::bitset<8> &secondByte) {
