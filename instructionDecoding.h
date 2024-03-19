@@ -77,5 +77,10 @@ void decodeRegToRegMovInstruction(const TwoBytes &inputBits, X8086Instruction &i
 void decodeImmediateToAcc(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &operationType, ProgramOutput &programOutput);
 bool checkIfJump(const TwoBytes &inputBits);
 bool checkIfImmediateMov(const TwoBytes &inputBits);
+void computeAddSubCmpAndSetZeroFlag(const X8086Instruction &instruction, const std::string &instructionType,
+                                    ProgramOutput &programOutput);
+void checkZeroFlag(ProgramOutput &programOutput, int newValue);
+void computeDirectAddSubCmpAndSetZeroFlag(const X8086Instruction &instruction, const std::string &instructionType,
+                                          ProgramOutput &programOutput);
 
 #endif //HW1_INSTRUCTIONDECODING_H

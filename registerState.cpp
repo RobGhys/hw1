@@ -2,6 +2,7 @@
 // Created by rob on 18/03/24.
 //
 
+#include <iomanip>
 #include "registerState.h"
 
 
@@ -22,8 +23,30 @@ std::unordered_map<std::string, int> initializeRegisterValueMap() {
 
 void printRegisterValueMap(const std::unordered_map<std::string, int> &registerValueMap) {
     for (const auto &pair : registerValueMap) {
-        std::cout << pair.first << " -> " << std::hex << pair.second << std::endl;
+        // Left-align the register name and set a minimum width
+        std::cout << std::left << std::setw(6) << pair.first << ": 0x"
+                  << std::hex << std::setfill('0') << std::setw(4) << pair.second
+                  // Reset fill character for decimal output
+                  << std::setfill(' ') << " (" << std::dec << pair.second << ")" << std::endl;
     }
+}
+
+bool updateRegisterValueMapAndGetSignFlag(std::unordered_map<std::string, int> &registerValueMap, const std::string &key, int newValue) {
+    auto iterator = registerValueMap.find(key);
+    if (iterator != registerValueMap.end()) {
+        iterator->second = newValue;
+
+        // MSB is 15th bit. Shift 15 times to the right. Use logical AND.
+        bool signFlag = (newValue >> 15) & 1;
+        if (signFlag) {
+            std::cout << "S -> 1"  << "val: " << newValue << std::endl;
+        } else {
+            std::cout << "S -> 0" << std::endl;
+
+        }
+        return signFlag;
+    }
+    return false;
 }
 
 void updateRegisterValueMap(std::unordered_map<std::string, int> &registerValueMap, const std::string &key, int newValue) {

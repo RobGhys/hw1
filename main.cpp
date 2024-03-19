@@ -128,9 +128,9 @@ int main(int argc, char *argv[])
         std::cout << instruction << std::endl;
     }
 
-    std::cout << "=== Registers state ==" << std::endl;
+    std::cout << "\n=== Registers state ==" << std::endl;
     printRegisterValueMap(programOutput.registerValueMap);
 
-    std::cout << "=== Flags ===" << std::endl << "Z -> " << programOutput.flags.zeroFlag << " | S -> " << programOutput.flags.signFlag << std::endl;
+    std::cout << "\n=== Flags ===" << std::endl << "Z -> " << programOutput.flags.zeroFlag << " | S -> " << programOutput.flags.signFlag << std::endl;
 
 }
