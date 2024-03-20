@@ -27,15 +27,29 @@ std::string readExtraBytes(std::ifstream &inputFile, int bytesToRead) {
 
         if (bytesToRead == 1) {
             byteDisplacement = additionalBytes[0];
-            /*std::bitset<8> binaryRepresentation(additionalBytes[0]);
-            std::cout << "bits: " << binaryRepresentation << std::endl;*/
+            std::bitset<8> binaryRepresentation(additionalBytes[0]);
+            //std::cout << "bits: " << binaryRepresentation << std::endl;
         } else if (bytesToRead == 2) {
             // endian order matters. Little endian -> most significant byte is read 2nd
             byteDisplacement = additionalBytes[0] | (additionalBytes[1] << 8);
-/*            std::bitset<16> binaryRepresentation(additionalBytes[0] | (additionalBytes[1] << 8));
-            std::cout << "bits: " << binaryRepresentation << std::endl;*/
+            std::bitset<16> binaryRepresentation(additionalBytes[0] | (additionalBytes[1] << 8));
+            //std::cout << "bits: " << binaryRepresentation << std::endl;
         }
     }
+
+    return std::to_string(byteDisplacement);
+}
+
+std::string readTwoBytesAndUseMSB(std::ifstream &inputFile, int bytesToRead) {
+
+    int byteDisplacement = 0;
+    unsigned char additionalBytes[2];
+    inputFile.read(reinterpret_cast<char*>(additionalBytes), bytesToRead);
+
+    byteDisplacement = additionalBytes[0];
+    std::bitset<8> binaryRepresentation(byteDisplacement);
+
+    //std::cout << "bits should be: 00000010 -> " << binaryRepresentation << std::endl;
 
     return std::to_string(byteDisplacement);
 }

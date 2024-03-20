@@ -76,6 +76,7 @@ ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleE
         sixteenBits = getSixteenBits(littleEndian, twoBytes, binaryTwoBytes, sixteenBits);
         instruction.operation = getOperation(sixteenBits);
         //addBinaryToStringVector(programOutput.instructionPrinter, sixteenBits); // debugging
+        //std::cout << sixteenBits.firstByte << " " << sixteenBits.secondByte << std::endl;
 
         switch (instruction.operation) {
             case MovRegisterToRegister:
@@ -103,7 +104,7 @@ ProgramOutput readBinFile(const std::string &listingXAssembledPath, bool littleE
                 decodeImmediateToAcc(sixteenBits, inputFile, instruction, "cmp", programOutput, ip);
                 break;
             case JumpInstruction:
-                decodeJumpInstruction(instruction, sixteenBits);
+                decodeJumpInstruction(instruction, sixteenBits, programOutput, ip);
                 break;
             case XImmediateToRegisterOrMemory:
                 decodeImmediateInstruction(sixteenBits, inputFile, instruction, programOutput, ip);
@@ -127,6 +128,7 @@ int main(int argc, char *argv[])
     std::string assembledPath = argv[1];
 
     ProgramOutput programOutput = readBinFile(assembledPath, littleEndian);
+    std::cout << "\n=== Instructions ==" << std::endl;
 
     for (const std::string& instruction : programOutput.instructionPrinter) {
         std::cout << instruction << std::endl;

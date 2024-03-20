@@ -18,11 +18,19 @@ void showAsHexa(int intValue) {
               << std::endl;
 }
 
-std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits) {
+void decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits, ProgramOutput &programOutput, InstructionPointer &ip) {
     auto hashJumpEncoding = getHashJumpEncoding();
     std::string instrName = hashJumpEncoding[sixteenBits.firstByte];
     instruction.sourceReg = std::to_string(convertOneByteBase2ToBase10(sixteenBits.secondByte));
-    return instrName + " " + instruction.sourceReg;
+
+    std::string output = instrName + " " + instruction.sourceReg;
+    programOutput.instructionPrinter.emplace_back(output);
+    //std::cout << output << std::endl;
+
+    if (instrName == "JNZ" && programOutput.flags.zeroFlag == 0) {
+        ip.ip = std::stoi(instruction.sourceReg);
+
+    }
 }
 
 void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, ProgramOutput &programOutput, InstructionPointer &ip) {
@@ -68,7 +76,12 @@ void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inpu
     // Register to register (MOD 11)
     if (instruction.operationMod == RegisterMode) {
         instruction.destReg = registerBitsetMap[rmField];
-        instruction.sourceReg = readExtraBytes(inputFile, 2);
+
+        //instruction.sourceReg = readExtraBytes(inputFile, dataByte);
+        if (operationType == "cmp")
+            instruction.sourceReg = readTwoBytesAndUseMSB(inputFile, 1);
+        else
+            instruction.sourceReg = readExtraBytes(inputFile, dataByte);
         ip.ip += 4; // two first bytes, data, data (no disp-lo or disp-high)
     } else { // Mod is 00, 01 or 10
         if (rmField != std::bitset<3>("110")) {
@@ -94,8 +107,6 @@ void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inpu
         ip.ip += 3; // two first bytes, 1 for data
     }
 
-    //std::cout << "Total bytes to read: " << dataByte << std::endl;
-
     std::string output = operationType;
     if (!operationSize.empty()) {
         output += " " + operationSize + " " + instruction.destReg + ", " + instruction.sourceReg;
@@ -107,6 +118,7 @@ void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inpu
     computeDirectAddSubCmpAndSetZeroFlag(instruction, operationType, programOutput);
     showAsHexa(ip.ip);
     programOutput.instructionPrinter.emplace_back(output);
+    //std::cout << output << std::endl;
 }
 
 int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instruction) {
@@ -238,7 +250,7 @@ void computeDirectAddSubCmpAndSetZeroFlag(const X8086Instruction &instruction, c
 void checkZeroFlag(ProgramOutput &programOutput, int newValue) {
     if (newValue == 0) {
         programOutput.flags.zeroFlag = true;
-        std::cout << "Z -> 1" << std::endl;
+        //std::cout << "Z -> 1" << std::endl;
     } else {
         programOutput.flags.zeroFlag = false;
     }

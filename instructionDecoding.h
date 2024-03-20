@@ -72,7 +72,7 @@ struct InstructionPointer {
     int ip = 0;
 };
 
-std::string decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits);
+void decodeJumpInstruction(X8086Instruction &instruction, const TwoBytes &sixteenBits, ProgramOutput &programOutput, InstructionPointer &ip);
 void decodeImmediateInstruction(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, ProgramOutput &programOutput, InstructionPointer &ip);
 int getModAndDecodeExtraBytes(const TwoBytes &inputBits, X8086Instruction &instruction);
 void outputImmediateToReg(const TwoBytes &sixteenBits, std::ifstream &inputFile, X8086Instruction &instruction, const std::string &instructionType, ProgramOutput &programOutput, InstructionPointer &ip);

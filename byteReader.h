@@ -19,5 +19,6 @@ bool checkSixBitsInRegister(const TwoBytes &inputBits, const std::bitset<6> &ins
 bool checkSevenBitsInRegister(const TwoBytes &inputBits, const std::bitset<7> &instructionBits);
 TwoBytes &getSixteenBits(bool littleEndian, uint16_t twoBytes, std::bitset<16> &binaryTwoBytes, TwoBytes &sixteenBits);
 void readExtraByteAndDoNothing(std::ifstream &inputFile);
+std::string readTwoBytesAndUseMSB(std::ifstream &inputFile, int bytesToRead);
 
 #endif //HW1_BYTEREADER_H

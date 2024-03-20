@@ -38,12 +38,12 @@ bool updateRegisterValueMapAndGetSignFlag(std::unordered_map<std::string, int> &
 
         // MSB is 15th bit. Shift 15 times to the right. Use logical AND.
         bool signFlag = (newValue >> 15) & 1;
-        if (signFlag) {
+        /*if (signFlag) {
             std::cout << "S -> 1"  << "val: " << newValue << std::endl;
         } else {
             std::cout << "S -> 0" << std::endl;
 
-        }
+        }*/
         return signFlag;
     }
     return false;
